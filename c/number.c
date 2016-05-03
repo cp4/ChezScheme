@@ -523,32 +523,33 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
 void asm_add(bigit *xp, iptr xl, bigit *yp, iptr yl, bigit *zp)
 {
     bigit sum;
-    iptr yi = yl;
-    iptr xi = xl;
+    iptr len1 = yl;
+    iptr len2 = xl - yl;
 
     __asm__ __volatile__ (
+        "clc\n\t"
         "1:\n\t"
-        "movl -4(%[xp], %[xi], 4), %[sum]\n\t"
-        "adcl -4(%[yp], %[yi], 4), %[sum]\n\t"
+        "movl (%[xp]), %[sum]\n\t"
+        "adcl (%[yp]), %[sum]\n\t"
         "movl %[sum], (%[zp])\n\t"
-        "lea -1(%[xi]), %[xi]\n\t"
+        "lea -4(%[xp]), %[xp]\n\t"
+        "lea -4(%[yp]), %[yp]\n\t"
         "lea -4(%[zp]), %[zp]\n\t"
         "loop 1b\n\t"
-        : [xi]"+r"(xi), [yi]"+c"(yi), [sum]"+r"(sum), [zp]"+r"(zp)
-        : [xp]"r"(xp), [yp]"r"(yp));
+        : "+c"(len1), [sum]"+r"(sum), [xp]"+r"(xp), [yp]"+r"(yp), [zp]"+r"(zp));
 
     __asm__ __volatile__ (
          "1:\n\t"
-         "movl -4(%[xp], %[xi], 4), %[sum]\n\t"
+         "movl (%[xp]), %[sum]\n\t"
          "adcl $0, %[sum]\n\t"
          "movl %[sum], (%[zp])\n\t"
+         "lea -4(%[xp]), %[xp]\n\t"
          "lea -4(%[zp]), %[zp]\n\t"
          "loop 1b\n\t"
          "movl $0, %[sum]\n\t"
          "adcl $0, %[sum]\n\t"
          "movl %[sum], (%[zp])\n\t"
-         : [xi]"+c"(xi), [sum]"+r"(sum), [zp]"+r"(zp)
-         : [xp]"r"(xp), [yp]"r"(yp));
+         : "+c"(len2), [sum]"+r"(sum), [xp]"+r"(xp), [yp]"+r"(yp), [zp]"+r"(zp));
 }
 
 /* assumptions: x >= y */
