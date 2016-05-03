@@ -29,7 +29,6 @@ static ptr copy_normalize PROTO((bigit *p, iptr len, IBOOL sign));
 static IBOOL abs_big_lt PROTO((ptr x, ptr y, iptr xl, iptr yl));
 static IBOOL abs_big_eq PROTO((ptr x, ptr y, iptr xl, iptr yl));
 static ptr big_add_pos PROTO((ptr tc, ptr x, ptr y, iptr xl, iptr yl, IBOOL sign));
-static void asm_add PROTO((bigit *xp, iptr xl, bigit *yp, iptr yl, bigit *zp));
 static ptr big_add_neg PROTO((ptr tc, ptr x, ptr y, iptr xl, iptr yl, IBOOL sign));
 static ptr big_add PROTO((ptr tc, ptr x, ptr y, iptr xl, iptr yl, IBOOL xs, IBOOL ys));
 static ptr big_mul PROTO((ptr tc, ptr x, ptr y, iptr xl, iptr yl, IBOOL sign));
@@ -506,51 +505,58 @@ addition/subtraction
 ***
 */
 
-/* assumptions: BIGLEN(x) >= BIGLEN(y) */
 static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL sign; {
   bigit *xp, *yp, *zp;
 
   PREPARE_BIGNUM(W(tc),xl+1)
 
-  xp = &BIGIT(x,xl-1);
-  yp = &BIGIT(y,yl-1);
-  zp = &BIGIT(W(tc),xl);
+  xp = &BIGIT(x,xl-1); yp = &BIGIT(y,yl-1); zp = &BIGIT(W(tc),xl);
 
-  asm_add(xp, xl, yp, yl, zp);
+  bigit sum;
+  iptr len1 = yl;
+  iptr len2 = xl - yl;
+
+  __asm__ __volatile__ (
+      "clc\n\t"
+      "1:\n\t"
+      "movl (%[xp]), %[sum]  \n\t"
+      "adcl (%[yp]), %[sum]  \n\t"
+      "movl %[sum], (%[zp])  \n\t"
+      "lea -4(%[xp]), %[xp]  \n\t"
+      "lea -4(%[yp]), %[yp]  \n\t"
+      "lea -4(%[zp]), %[zp]  \n\t"
+      "loop 1b               \n\t"
+      : "+c"(len1), [sum]"+r"(sum), [xp]"+r"(xp), [yp]"+r"(yp), [zp]"+r"(zp));
+
+  __asm__ __volatile__ (
+      "jecxz 3f              \n\t"
+      "1:                    \n\t"
+      "jnc 2f                \n\t"
+      "movl (%[xp]), %[sum]  \n\t"
+      "adcl $0, %[sum]       \n\t"
+      "movl %[sum], (%[zp])  \n\t"
+      "lea -4(%[xp]), %[xp]  \n\t"
+      "lea -4(%[zp]), %[zp]  \n\t"
+      "loop 1b               \n\t"
+      "jmp 3f                \n\t"
+      "2:                    \n\t"
+      "movl (%[xp]), %[sum]  \n\t"
+      "movl %[sum], (%[zp])  \n\t"
+      "lea -4(%[xp]), %[xp]  \n\t"
+      "lea -4(%[zp]), %[zp]  \n\t"
+      "loop 2b               \n\t"
+      "3:                    \n\t"
+      : "+c"(len2), [sum]"+r"(sum), [xp]"+r"(xp), [zp]"+r"(zp));
+
+  __asm__ __volatile__ (
+      "movl $0, %[sum]\n\t"
+      "adcl $0, %[sum]\n\t"
+      "movl %[sum], (%[zp])\n\t"
+      : [sum]"+r"(sum), [zp]"+r"(zp));
+
   return copy_normalize(zp,xl+1,sign);
 }
 
-void asm_add(bigit *xp, iptr xl, bigit *yp, iptr yl, bigit *zp)
-{
-    bigit sum;
-    iptr len1 = yl;
-    iptr len2 = xl - yl;
-
-    __asm__ __volatile__ (
-        "clc\n\t"
-        "1:\n\t"
-        "movl (%[xp]), %[sum]\n\t"
-        "adcl (%[yp]), %[sum]\n\t"
-        "movl %[sum], (%[zp])\n\t"
-        "lea -4(%[xp]), %[xp]\n\t"
-        "lea -4(%[yp]), %[yp]\n\t"
-        "lea -4(%[zp]), %[zp]\n\t"
-        "loop 1b\n\t"
-        : "+c"(len1), [sum]"+r"(sum), [xp]"+r"(xp), [yp]"+r"(yp), [zp]"+r"(zp));
-
-    __asm__ __volatile__ (
-         "1:\n\t"
-         "movl (%[xp]), %[sum]\n\t"
-         "adcl $0, %[sum]\n\t"
-         "movl %[sum], (%[zp])\n\t"
-         "lea -4(%[xp]), %[xp]\n\t"
-         "lea -4(%[zp]), %[zp]\n\t"
-         "loop 1b\n\t"
-         "movl $0, %[sum]\n\t"
-         "adcl $0, %[sum]\n\t"
-         "movl %[sum], (%[zp])\n\t"
-         : "+c"(len2), [sum]"+r"(sum), [xp]"+r"(xp), [yp]"+r"(yp), [zp]"+r"(zp));
-}
 
 /* assumptions: x >= y */
 static ptr big_add_neg(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL sign; {
