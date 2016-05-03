@@ -29,7 +29,7 @@ static ptr copy_normalize PROTO((bigit *p, iptr len, IBOOL sign));
 static IBOOL abs_big_lt PROTO((ptr x, ptr y, iptr xl, iptr yl));
 static IBOOL abs_big_eq PROTO((ptr x, ptr y, iptr xl, iptr yl));
 static ptr big_add_pos PROTO((ptr tc, ptr x, ptr y, iptr xl, iptr yl, IBOOL sign));
-static void asm_add PROTO((uint32_t *xp, int xl, uint32_t *yp, int yl, uint32_t *zp));
+static void asm_add PROTO((bigit *xp, iptr xl, bigit *yp, iptr yl, bigit *zp));
 static ptr big_add_neg PROTO((ptr tc, ptr x, ptr y, iptr xl, iptr yl, IBOOL sign));
 static ptr big_add PROTO((ptr tc, ptr x, ptr y, iptr xl, iptr yl, IBOOL xs, IBOOL ys));
 static ptr big_mul PROTO((ptr tc, ptr x, ptr y, iptr xl, iptr yl, IBOOL sign));
@@ -520,11 +520,11 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
   return copy_normalize(zp,xl+1,sign);
 }
 
-void asm_add(uint32_t *xp, int xl, uint32_t *yp, int yl, uint32_t *zp)
+void asm_add(bigit *xp, iptr xl, bigit *yp, iptr yl, bigit *zp)
 {
-    uint32_t sum;
-    uint64_t yi = yl;
-    uint64_t xi = xl;
+    bigit sum;
+    iptr yi = yl;
+    iptr xi = xl;
 
     __asm__ __volatile__ (
         "1:\n\t"
