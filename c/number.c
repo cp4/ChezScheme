@@ -512,13 +512,13 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
 
   xp = &BIGIT(x,xl-1); yp = &BIGIT(y,yl-1); zp = &BIGIT(W(tc),xl);
 
-  bigit sum;
-  iptr len1 = yl;
-  iptr len2 = xl - yl;
+  volatile bigit sum;
+  volatile iptr len1 = yl;
+  volatile iptr len2 = xl - yl;
 
-  __asm__ __volatile__ (
-      "clc\n\t"
-      "1:\n\t"
+  __asm__ (
+      "clc                   \n\t"
+      "1:                    \n\t"
       "movl (%[xp]), %[sum]  \n\t"
       "adcl (%[yp]), %[sum]  \n\t"
       "movl %[sum], (%[zp])  \n\t"
@@ -528,7 +528,7 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
       "loop 1b               \n\t"
       : "+c"(len1), [sum]"+r"(sum), [xp]"+r"(xp), [yp]"+r"(yp), [zp]"+r"(zp));
 
-  __asm__ __volatile__ (
+  __asm__ (
       "jecxz 3f              \n\t"
       "1:                    \n\t"
       "jnc 2f                \n\t"
@@ -548,7 +548,7 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
       "3:                    \n\t"
       : "+c"(len2), [sum]"+r"(sum), [xp]"+r"(xp), [zp]"+r"(zp));
 
-  __asm__ __volatile__ (
+  __asm__ (
       "movl $0, %[sum]\n\t"
       "adcl $0, %[sum]\n\t"
       "movl %[sum], (%[zp])\n\t"
