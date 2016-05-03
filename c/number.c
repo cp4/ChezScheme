@@ -507,22 +507,41 @@ addition/subtraction
 
 /* assumptions: BIGLEN(x) >= BIGLEN(y) */
 static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL sign; {
-  iptr i;
   bigit *xp, *yp, *zp;
-  bigit k = 0;
 
   PREPARE_BIGNUM(W(tc),xl+1)
 
   xp = &BIGIT(x,xl-1); yp = &BIGIT(y,yl-1); zp = &BIGIT(W(tc),xl);
 
-  for (i = yl; i-- > 0; )
-    EADDC(*xp--, *yp--, zp--, &k)
-  for (i = xl - yl; k != 0 && i-- > 0; )
-    EADDC(*xp--, 0, zp--, &k)
-  for (; i-- > 0; )
-    *zp-- = *xp--;
+  uint32_t sum;
+  uint64_t yi = yl;
+  uint64_t xi = xl;
 
-  *zp = k;
+  asm (
+      "loop_adc1:\n\t"
+      "movl -4(%[xp], %[xi], 4), %[sum]\n\t"
+      "adcl -4(%[yp], %[yi], 4), %[sum]\n\t"
+      "movl %[sum], (%[zp])\n\t"
+      "lea -1(%[xi]), %[xi]\n\t"
+      "lea -4(%[zp]), %[zp]\n\t"
+      "loop loop_adc1\n\t"
+      : [xi]"+r"(xi), [yi]"+c"(yi), [sum]"+r"(sum), [zp]"+r"(zp)
+      : [xp]"r"(xp), [yp]"r"(yp)
+      : "%rcx");
+
+  asm (
+      "loop_adc2:\n\t"
+      "movl -4(%[xp], %[xi], 4), %[sum]\n\t"
+      "adcl $0, %[sum]\n\t"
+      "movl %[sum], (%[zp])\n\t"
+      "lea -4(%[zp]), %[zp]\n\t"
+      "loop loop_adc2\n\t"
+      "movl $0, %[sum]\n\t"
+      "adcl $0, %[sum]\n\t"
+      "movl %[sum], (%[zp])\n\t"
+      : [xi]"+c"(xi), [sum]"+r"(sum), [zp]"+r"(zp)
+      : [xp]"r"(xp), [yp]"r"(yp)
+      : "%rcx");
 
   return copy_normalize(zp,xl+1,sign);
 }
