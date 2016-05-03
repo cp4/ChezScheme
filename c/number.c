@@ -1,12 +1,12 @@
 /* number.c
  * Copyright 1984-2016 Cisco Systems, Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,6 +29,7 @@ static ptr copy_normalize PROTO((bigit *p, iptr len, IBOOL sign));
 static IBOOL abs_big_lt PROTO((ptr x, ptr y, iptr xl, iptr yl));
 static IBOOL abs_big_eq PROTO((ptr x, ptr y, iptr xl, iptr yl));
 static ptr big_add_pos PROTO((ptr tc, ptr x, ptr y, iptr xl, iptr yl, IBOOL sign));
+static void asm_add PROTO((uint32_t *xp, int xl, uint32_t *yp, int yl, uint32_t *zp));
 static ptr big_add_neg PROTO((ptr tc, ptr x, ptr y, iptr xl, iptr yl, IBOOL sign));
 static ptr big_add PROTO((ptr tc, ptr x, ptr y, iptr xl, iptr yl, IBOOL xs, IBOOL ys));
 static ptr big_mul PROTO((ptr tc, ptr x, ptr y, iptr xl, iptr yl, IBOOL sign));
@@ -137,7 +138,7 @@ see v7.4 number.c for U64_TO_BIGNUM w/U64_bigits == 4
 
 ptr S_normalize_bignum(ptr x) {
   uptr n = BIGIT(x, 0); iptr len = BIGLEN(x); IBOOL sign = BIGSIGN(x);
- 
+
 #if (ptr_bigits == 1)
   if (len == 1) {
     if (sign) {
@@ -511,39 +512,43 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
 
   PREPARE_BIGNUM(W(tc),xl+1)
 
-  xp = &BIGIT(x,xl-1); yp = &BIGIT(y,yl-1); zp = &BIGIT(W(tc),xl);
+  xp = &BIGIT(x,xl-1);
+  yp = &BIGIT(y,yl-1);
+  zp = &BIGIT(W(tc),xl);
 
-  uint32_t sum;
-  uint64_t yi = yl;
-  uint64_t xi = xl;
-
-  asm (
-      "loop_adc1:\n\t"
-      "movl -4(%[xp], %[xi], 4), %[sum]\n\t"
-      "adcl -4(%[yp], %[yi], 4), %[sum]\n\t"
-      "movl %[sum], (%[zp])\n\t"
-      "lea -1(%[xi]), %[xi]\n\t"
-      "lea -4(%[zp]), %[zp]\n\t"
-      "loop loop_adc1\n\t"
-      : [xi]"+r"(xi), [yi]"+c"(yi), [sum]"+r"(sum), [zp]"+r"(zp)
-      : [xp]"r"(xp), [yp]"r"(yp)
-      : "%rcx");
-
-  asm (
-      "loop_adc2:\n\t"
-      "movl -4(%[xp], %[xi], 4), %[sum]\n\t"
-      "adcl $0, %[sum]\n\t"
-      "movl %[sum], (%[zp])\n\t"
-      "lea -4(%[zp]), %[zp]\n\t"
-      "loop loop_adc2\n\t"
-      "movl $0, %[sum]\n\t"
-      "adcl $0, %[sum]\n\t"
-      "movl %[sum], (%[zp])\n\t"
-      : [xi]"+c"(xi), [sum]"+r"(sum), [zp]"+r"(zp)
-      : [xp]"r"(xp), [yp]"r"(yp)
-      : "%rcx");
-
+  asm_add(xp, xl, yp, yl, zp);
   return copy_normalize(zp,xl+1,sign);
+}
+
+void asm_add(uint32_t *xp, int xl, uint32_t *yp, int yl, uint32_t *zp)
+{
+    uint32_t sum;
+    uint64_t yi = yl;
+    uint64_t xi = xl;
+
+    __asm__ __volatile__ (
+        "1:\n\t"
+        "movl -4(%[xp], %[xi], 4), %[sum]\n\t"
+        "adcl -4(%[yp], %[yi], 4), %[sum]\n\t"
+        "movl %[sum], (%[zp])\n\t"
+        "lea -1(%[xi]), %[xi]\n\t"
+        "lea -4(%[zp]), %[zp]\n\t"
+        "loop 1b\n\t"
+        : [xi]"+r"(xi), [yi]"+c"(yi), [sum]"+r"(sum), [zp]"+r"(zp)
+        : [xp]"r"(xp), [yp]"r"(yp));
+
+    __asm__ __volatile__ (
+         "1:\n\t"
+         "movl -4(%[xp], %[xi], 4), %[sum]\n\t"
+         "adcl $0, %[sum]\n\t"
+         "movl %[sum], (%[zp])\n\t"
+         "lea -4(%[zp]), %[zp]\n\t"
+         "loop 1b\n\t"
+         "movl $0, %[sum]\n\t"
+         "adcl $0, %[sum]\n\t"
+         "movl %[sum], (%[zp])\n\t"
+         : [xi]"+c"(xi), [sum]"+r"(sum), [zp]"+r"(zp)
+         : [xp]"r"(xp), [yp]"r"(yp));
 }
 
 /* assumptions: x >= y */
@@ -1137,7 +1142,7 @@ static double floatify_normalize(p, e, sign, sticky) bigit *p; iptr e; IBOOL sig
   U64 mlow;
   IBOOL cutbit = 0;
   INT n;
- 
+
   /* shift in what we need, plus at least one bit */
   mhigh = 0; mlow = 0; n = enough;
   while (mhigh == 0 && mlow < hidden_bit * 2) {
