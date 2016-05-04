@@ -512,14 +512,22 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
 
   xp = &BIGIT(x,xl-1); yp = &BIGIT(y,yl-1); zp = &BIGIT(W(tc),xl);
 
+#define UNROLL 4
   volatile bigit sum;
 
-  volatile iptr c1 = yl;
+  volatile iptr c1a = yl / UNROLL * UNROLL;
+  volatile iptr c1b = yl % UNROLL;
   volatile iptr c2 = xl - yl;
 
-  volatile bigit *x1 = xp - yl + 1;
-  volatile bigit *y1 = yp - yl + 1;
-  volatile bigit *z1 = zp - yl + 1;
+//  printf("yl=%ld, c1a=%ld, c1b=%ld\n", yl, c1a, c1b);
+
+  volatile bigit *x1 = xp - c1a + 1;
+  volatile bigit *y1 = yp - c1a + 1;
+  volatile bigit *z1 = zp - c1a + 1;
+
+  volatile bigit *x1a = xp - yl + 1;
+  volatile bigit *y1a = yp - yl + 1;
+  volatile bigit *z1a = zp - yl + 1;
 
   volatile bigit *x2 = xp - xl + 1;
   volatile bigit *z2 = zp - xl + 1;
@@ -529,13 +537,39 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
       "clc                             \n\t"
       "1:                              \n\t"
       "jecxz 2f                        \n\t"
-      "movl -4(%[x1],%[c1],4), %[sum]  \n\t"
-      "adcl -4(%[y1],%[c1],4), %[sum]  \n\t"
-      "movl %[sum], -4(%[z1],%[c1],4)  \n\t"
-      "lea -1(%[c1]), %[c1]            \n\t"
+
+      "movl -4(%[x1],%[c1a],4), %[sum]  \n\t"
+      "adcl -4(%[y1],%[c1a],4), %[sum]  \n\t"
+      "movl %[sum], -4(%[z1],%[c1a],4)  \n\t"
+
+      "movl -8(%[x1],%[c1a],4), %[sum]  \n\t"
+      "adcl -8(%[y1],%[c1a],4), %[sum]  \n\t"
+      "movl %[sum], -8(%[z1],%[c1a],4)  \n\t"
+
+      "movl -12(%[x1],%[c1a],4), %[sum]  \n\t"
+      "adcl -12(%[y1],%[c1a],4), %[sum]  \n\t"
+      "movl %[sum], -12(%[z1],%[c1a],4)  \n\t"
+
+      "movl -16(%[x1],%[c1a],4), %[sum]  \n\t"
+      "adcl -16(%[y1],%[c1a],4), %[sum]  \n\t"
+      "movl %[sum], -16(%[z1],%[c1a],4)  \n\t"
+
+      "lea -4(%[c1a]), %[c1a]            \n\t"
       "jmp 1b                          \n\t"
       "2:                              \n\t"
-      : [c1]"+c"(c1), [sum]"+r"(sum), [x1]"+r"(x1), [y1]"+r"(y1), [z1]"+r"(z1));
+      : [c1a]"+c"(c1a), [sum]"+r"(sum), [x1]"+r"(x1), [y1]"+r"(y1), [z1]"+r"(z1));
+
+  __asm__ (
+//      "clc                             \n\t"
+      "1:                              \n\t"
+      "jecxz 2f                        \n\t"
+      "movl -4(%[x1],%[c1b],4), %[sum]  \n\t"
+      "adcl -4(%[y1],%[c1b],4), %[sum]  \n\t"
+      "movl %[sum], -4(%[z1],%[c1b],4)  \n\t"
+      "lea -1(%[c1b]), %[c1b]            \n\t"
+      "jmp 1b                          \n\t"
+      "2:                              \n\t"
+      : [c1b]"+c"(c1b), [sum]"+r"(sum), [x1]"+r"(x1a), [y1]"+r"(y1a), [z1]"+r"(z1a));
 
   __asm__ (
       "1:                              \n\t"
