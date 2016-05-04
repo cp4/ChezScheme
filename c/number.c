@@ -515,20 +515,20 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
   volatile bigit sum;
 
   volatile iptr c1 = yl;
-  volatile bigit *y1 = yp - yl + 1;
   volatile bigit *x1 = xp - yl + 1;
+  volatile bigit *y1 = yp - yl + 1;
   volatile bigit *z1 = zp - yl + 1;
 
   __asm__ (
-      "clc                   \n\t"
-      "1:                    \n\t"
-      "jecxz 2f              \n\t"
+      "clc                             \n\t"
+      "1:                              \n\t"
+      "jecxz 2f                        \n\t"
       "movl -4(%[x1],%[c1],4), %[sum]  \n\t"
       "adcl -4(%[y1],%[c1],4), %[sum]  \n\t"
       "movl %[sum], -4(%[z1],%[c1],4)  \n\t"
-      "lea -1(%[c1]), %[c1]  \n\t"
-      "jmp 1b                \n\t"
-      "2:                    \n\t"
+      "lea -1(%[c1]), %[c1]            \n\t"
+      "jmp 1b                          \n\t"
+      "2:                              \n\t"
       : [c1]"+c"(c1), [sum]"+r"(sum), [x1]"+r"(x1), [y1]"+r"(y1), [z1]"+r"(z1));
 
 
@@ -537,24 +537,24 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
   volatile bigit *z2 = zp - xl + 1;
 
   __asm__ (
-      "1:                    \n\t"
-      "jecxz 3f              \n\t"
+      "1:                              \n\t"
+      "jecxz 2f                        \n\t"
       "movl -4(%[x2],%[c2],4), %[sum]  \n\t"
-      "adcl $0, %[sum]       \n\t"
+      "adcl $0, %[sum]                 \n\t"
       "movl %[sum], -4(%[z2],%[c2],4)  \n\t"
-      "lea -1(%[c2]), %[c2]  \n\t"
-      "jmp 1b                \n\t"
-      "3:                    \n\t"
+      "lea -1(%[c2]), %[c2]            \n\t"
+      "jmp 1b                          \n\t"
+      "2:                              \n\t"
       : [c2]"+c"(c2), [sum]"+r"(sum), [x2]"+r"(x2), [z2]"+r"(z2));
 
 
-  volatile bigit *z3 = zp - xl;
+  zp = zp - xl;
 
   __asm__ (
-      "movl $0, %[sum]\n\t"
-      "adcl $0, %[sum]\n\t"
-      "movl %[sum], (%[z3])\n\t"
-      : [sum]"+r"(sum), [z3]"+r"(z3));
+      "movl $0, %[sum]         \n\t"
+      "adcl $0, %[sum]         \n\t"
+      "movl %[sum], (%[zp])    \n\t"
+      : [sum]"+r"(sum), [zp]"+r"(zp));
 
   return copy_normalize(zp,xl+1,sign);
 }
