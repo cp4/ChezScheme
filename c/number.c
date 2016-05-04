@@ -513,40 +513,45 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
   xp = &BIGIT(x,xl-1); yp = &BIGIT(y,yl-1); zp = &BIGIT(W(tc),xl);
 
   volatile bigit sum;
-  volatile iptr len1 = yl;
-  volatile iptr len2 = xl - yl;
+  volatile iptr c1 = yl;
+  volatile iptr c2 = xl - yl;
 
   __asm__ (
       "clc                   \n\t"
       "1:                    \n\t"
+      "jecxz 2f              \n\t"
       "movl (%[xp]), %[sum]  \n\t"
       "adcl (%[yp]), %[sum]  \n\t"
       "movl %[sum], (%[zp])  \n\t"
       "lea -4(%[xp]), %[xp]  \n\t"
       "lea -4(%[yp]), %[yp]  \n\t"
       "lea -4(%[zp]), %[zp]  \n\t"
-      "loop 1b               \n\t"
-      : "+c"(len1), [sum]"+r"(sum), [xp]"+r"(xp), [yp]"+r"(yp), [zp]"+r"(zp));
+      "lea -1(%[c1]), %[c1]  \n\t"
+      "jmp 1b                \n\t"
+      "2:                    \n\t"
+      : [c1]"+c"(c1), [sum]"+r"(sum), [xp]"+r"(xp), [yp]"+r"(yp), [zp]"+r"(zp));
 
   __asm__ (
-      "jecxz 3f              \n\t"
       "1:                    \n\t"
+      "jecxz 3f              \n\t"
       "jnc 2f                \n\t"
       "movl (%[xp]), %[sum]  \n\t"
       "adcl $0, %[sum]       \n\t"
       "movl %[sum], (%[zp])  \n\t"
       "lea -4(%[xp]), %[xp]  \n\t"
       "lea -4(%[zp]), %[zp]  \n\t"
-      "loop 1b               \n\t"
-      "jmp 3f                \n\t"
+      "lea -1(%[c2]), %[c2]  \n\t"
+      "jmp 1b                \n\t"
       "2:                    \n\t"
+      "jecxz 3f              \n\t"
       "movl (%[xp]), %[sum]  \n\t"
       "movl %[sum], (%[zp])  \n\t"
       "lea -4(%[xp]), %[xp]  \n\t"
       "lea -4(%[zp]), %[zp]  \n\t"
-      "loop 2b               \n\t"
+      "lea -1(%[c2]), %[c2]  \n\t"
+      "jmp 2b                \n\t"
       "3:                    \n\t"
-      : "+c"(len2), [sum]"+r"(sum), [xp]"+r"(xp), [zp]"+r"(zp));
+      : [c2]"+c"(c2), [sum]"+r"(sum), [xp]"+r"(xp), [zp]"+r"(zp));
 
   __asm__ (
       "movl $0, %[sum]\n\t"
