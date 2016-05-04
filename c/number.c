@@ -517,7 +517,8 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
 
   volatile iptr c1 = yl / UNROLL * UNROLL;
   volatile iptr c2 = yl % UNROLL;
-  volatile iptr c3 = xl - yl;
+  volatile iptr c3 = (xl - yl) / UNROLL * UNROLL;
+  volatile iptr c4 = (xl - yl) % UNROLL;
 
   volatile bigit *x1 = xp - c1 + 1;
   volatile bigit *y1 = yp - c1 + 1;
@@ -527,11 +528,15 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
   volatile bigit *y2 = yp - yl + 1;
   volatile bigit *z2 = zp - yl + 1;
 
-  volatile bigit *x3 = xp - xl + 1;
-  volatile bigit *z3 = zp - xl + 1;
+  volatile bigit *x3 = xp - xl + 1 + c4;
+  volatile bigit *z3 = zp - xl + 1 + c4;
+
+  volatile bigit *x4 = xp - xl + 1;
+  volatile bigit *z4 = zp - xl + 1;
 
   volatile bigit *zz = zp - xl;
 
+  // process segment shared by xp and yp
   __asm__ (
       "clc                           \n\t"
       "1:                            \n\t"
@@ -561,6 +566,25 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
       "2:                            \n\t"
       : [c]"+c"(c2), [sum]"+r"(sum), [x]"+r"(x2), [y]"+r"(y2), [z]"+r"(z2));
 
+
+  // copy segment in xp but not in yp
+  __asm__ (
+      "1:                            \n\t"
+      "jecxz 2f                      \n\t"
+
+      "movl -4(%[x],%[c],4), %[sum]  \n\t"
+      "adcl $0, %[sum]               \n\t"
+      "movl %[sum], -4(%[z],%[c],4)  \n\t"
+
+      "movl -8(%[x],%[c],4), %[sum]  \n\t"
+      "adcl $0, %[sum]               \n\t"
+      "movl %[sum], -8(%[z],%[c],4)  \n\t"
+
+      "lea -2(%[c]), %[c]            \n\t"
+      "jmp 1b                        \n\t"
+      "2:                            \n\t"
+      : [c]"+c"(c3), [sum]"+r"(sum), [x]"+r"(x3), [z]"+r"(z3));
+
   __asm__ (
       "1:                            \n\t"
       "jecxz 2f                      \n\t"
@@ -570,7 +594,7 @@ static ptr big_add_pos(tc, x, y, xl, yl, sign) ptr tc, x, y; iptr xl, yl; IBOOL 
       "lea -1(%[c]), %[c]            \n\t"
       "jmp 1b                        \n\t"
       "2:                            \n\t"
-      : [c]"+c"(c3), [sum]"+r"(sum), [x]"+r"(x3), [z]"+r"(z3));
+      : [c]"+c"(c4), [sum]"+r"(sum), [x]"+r"(x4), [z]"+r"(z4));
 
   __asm__ (
       "movl $0, %[sum]         \n\t"
